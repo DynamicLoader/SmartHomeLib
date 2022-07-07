@@ -8,6 +8,7 @@
 */
     #define ENABLE_ARDUINO_STRING 1
     #define HLIST_SIZE 20
+    #define MSG_BUFFER_SIZE 512
 /*
         =========== User config end   ===========
 */
@@ -44,9 +45,9 @@ typedef std::string HString;
 #include <stdint.h>
 
 extern "C" {
-#include "core/cwpack.h"
-#include "core/cwpack_impl.h"
-#include "core/cwpack_utils.h"
+#include "helper/cwpack.h"
+#include "helper/cwpack_impl.h"
+#include "helper/cwpack_utils.h"
 }
 
 #include "SClient.h"
@@ -54,9 +55,6 @@ extern "C" {
 #include "SProtocol.hpp"
 
 namespace SmartHome {
-
-class Adapter;
-class Device;
 class Node;
 class Property;
 
@@ -110,17 +108,17 @@ private:
     internal::HBits<uint8_t> _flags;
     SmartHome::internal::HList<Node*> _nodeList;
 
-    void _processDeviceBroadcast(const char* topic, const uint8_t* msg, size_t len, size_t pos);
-
-    // Protocol Helper
-    static internal::PMsgPack_t makeDeviceMsg(internal::PDeviceState_t status, Device* dev);
+    // void _processDeviceBroadcast(const char* topic, const uint8_t* msg, size_t len, size_t pos);
+    internal::Msgpack<MSG_BUFFER_SIZE> _makeDeviceMsg(internal::PDeviceState_t status);
 
 protected:
-    bool _publishDeviceAttr(const char* attr, const uint8_t* msg) { return this->_cli->publish((this->_baseTopic + '/' + this->_id + '/' + attr).c_str(), msg, sizeof(msg), true); }
+    bool _publishDeviceAttr(const char* attr, const uint8_t* msg,size_t len) { return this->_cli->publish((this->_baseTopic + '/' + this->_id + '/' + attr).c_str(), msg, len, true); }
     bool _publishDeviceAttr(const char* attr, const char* msg) { return this->_cli->publish((this->_baseTopic + '/' + this->_id + '/' + attr).c_str(), (const uint8_t*)msg, sizeof(msg), true); }
+    bool _publishDeviceAttr(const char* attr, internal::Msgpack<MSG_BUFFER_SIZE>& msg) { return this->_cli->publish((this->_baseTopic + '/' + this->_id + '/' + attr).c_str(),msg.data(), msg.length(), true); }
 
     friend class Node;
     friend class Property;
+    
 };
 
 class Node {
@@ -151,8 +149,9 @@ private:
 
     bool _publishNode();
     bool _publishNodeAttr(const char* attr, const char* msg) { return this->_parent->_publishDeviceAttr((this->_id + '/' + attr).c_str(), msg); }
-    bool _publishNodeAttr(const char* attr, const uint8_t* msg) { return this->_parent->_publishDeviceAttr((this->_id + '/' + attr).c_str(), msg); }
-    void _processNodeCB(HString& topic, const uint8_t* msg, size_t len, size_t pos);
+    bool _publishNodeAttr(const char* attr, const uint8_t* msg,size_t len) { return this->_parent->_publishDeviceAttr((this->_id + '/' + attr).c_str(), msg,len); }
+    bool _publishNodeAttr(const char* attr, internal::Msgpack<MSG_BUFFER_SIZE>& msg) { return this->_parent->_publishDeviceAttr((this->_id + '/' + attr).c_str(), msg.data(),msg.length()); }
+    void _processNodeCB(internal::HStringSplitResult topic,const uint8_t* msg,size_t len);
 
 protected:
     friend class Device;
@@ -188,5 +187,6 @@ protected:
 #include "SDevice.hpp"
 #include "SNode.hpp"
 #include "SProperty.hpp"
+
 
 #endif // End of File

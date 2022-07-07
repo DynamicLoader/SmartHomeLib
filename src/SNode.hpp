@@ -23,10 +23,12 @@ bool Node::_publishNode()
     return ret;
 }
 
-void Node::_processNodeCB(HString& topic, const uint8_t* msg, size_t len, size_t pos)
+void Node::_processNodeCB(internal::HStringSplitResult topic,const uint8_t* msg, size_t len)
 {
+    HString tp=HString(topic.str);
+    //HString propid = HString_substr(topic.str, topic.offsets[1], pos + topic.offsets[2]);
 }
 
-}
+} // namespace SmartHome
 
 #endif

@@ -6,29 +6,28 @@
 #include <stdint.h>
 
 namespace SmartHome {
-
-bool HStringDlm(HString& in, HString& out, size_t& pos)
-{
-    size_t len = HString_strlen(in);
-    size_t pbegin = 0, pend = 0;
-    uint8_t offset1 = 0;
-    if (pos >= len)
-        return false;
-    if (pos == 0 && in[0] != '/') {
-        pbegin = 0;
-        offset1 = 1;
-    } else {
-        pbegin = HString_find(in, "/", pos);
-    }
-    if (pbegin >= len - 2) // Empty substring is ignored (e.g. "abc//")
-        return false;
-    pend = HString_find(in, "/", pbegin + 1);
-    out = HString_substr(in, pbegin + offset1, pend - 1);
-    pos = pend;
-    return true;
-}
-
 namespace internal {
+    struct HStringSplitResult {
+        const char* str = nullptr;
+        size_t offsets[5];
+        size_t rest = 0;
+        uint8_t count = 0;
+    };
+
+    HStringSplitResult HStringSplit(const char* src, size_t offset, char lim)
+    {
+        HStringSplitResult ret;
+        ret.str = src;
+        HString s(src, offset);
+        for (ret.count = 0; ret.count < 5; ret.count++) {
+            ret.rest = HString_find(s, lim, ret.rest);
+            if (ret.rest == s.length())
+                break;
+        }
+        ret.rest = ret.offsets[ret.count] + 1;
+        ret.count = (ret.count == 0 ? 0 : ret.count + 1);
+        return ret;
+    }
 
     // T must be a pointer of a class that cantains a "HString _id"
     template <typename T>
@@ -122,7 +121,7 @@ namespace internal {
 
         bool remove(T d)
         {
-            if ((!d) || (this->_count ==0))
+            if ((!d) || (this->_count == 0))
                 return false;
             uint8_t i = this->_find(d);
             if (i == 255)
@@ -134,7 +133,9 @@ namespace internal {
 
         uint8_t count() { return this->_count; }
         const T* const raw() { return (const T* const)this->_data; }
-        void sort() { HList::quickSort(this->_data, 0, this->_count-1); }
+        const T* const begin() { return (const T* const)&(this->_data[0]); }
+        const T* const end() { return (const T* const)&(this->_data[this->_count - 1]); }
+        void sort() { HList::quickSort(this->_data, 0, this->_count - 1); }
         T find(HString& id)
         {
             uint8_t i = HList::binarySearch(this->_data, 0, this->_count - 1, id);
@@ -142,6 +143,7 @@ namespace internal {
         }
     };
 
+    // T must be one of integer types
     template <typename T>
     class HBits {
     private:
@@ -163,6 +165,32 @@ namespace internal {
                 return false;
             return (bool)((this->_data & HBits::getmask(pos)) >> pos);
         }
+    };
+
+    template <uint16_t bufSize>
+    class Msgpack {
+    private:
+        cw_pack_context ctx;
+        uint8_t buf[bufSize] = { 0 };
+
+    public:
+        Msgpack() { cw_pack_context_init(&this->ctx, (void*)this->buf, bufsize, nullptr); }
+        ~Msgpack() { }
+        Msgpack(const Msgpack<bufSize>& cpy){
+            memcpy(this->buf,cpy.buf,bufsize);
+            this->ctx=cpy.ctx;
+        }
+        bool success() { return (this->ctx.err_no == CWP_RC_OK); }
+        uint16_t length(){return (this->ctx.current - this->ctx.start);}
+        const uint8_t* const data(){ return (const uint8_t* const)this->ctx.start;}
+
+        Msgpack<bufSize>& map(uint16_t size) { cw_pack_map_size(&this->ctx, size);return *this;}
+        Msgpack<bufSize>& array(uint16_t size) { cw_pack_array_size(&this->ctx, size);return *this; }
+
+        Msgpack<bufSize>& pack(HString& str) { cw_pack_str(&this->ctx, str.c_str(), str.length());return *this; }
+        Msgpack<bufSize>& pack(const char* str) { cw_pack_cstr(&this->ctx, str);return *this; }
+        Msgpack<bufSize>& pack(int32_t i) { cw_pack_signed(&this->ctx, i);return *this; }
+        Msgpack<bufSize>& pack(uint32_t u) { cw_pack_unsigned(&this->ctx, u);return *this; }
     };
 
 } // namespace internal

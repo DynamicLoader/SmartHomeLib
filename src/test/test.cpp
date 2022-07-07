@@ -1,6 +1,7 @@
+#include <iostream>
 #include "../SmartHomeLib.h"
 #include "../SClient.h"
-#include <iostream>
+
 using namespace SmartHome;
 using namespace std;
 
@@ -68,7 +69,7 @@ public:
 };
 
 ConsoleAdapter apt("localhost", 1883, "", "");
-Device dev(&apt, "root","test","","");
+Device dev(&apt, "root","test","testDevice","testFirmware");
 Node node1("node1", "node1", "TestNode");
 Property prop1("prop1", "prop1");
 
